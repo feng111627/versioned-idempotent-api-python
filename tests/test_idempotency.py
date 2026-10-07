@@ -72,7 +72,11 @@ def test_concurrent_duplicates_apply_once(make_client):
 
 
 def test_concurrent_mixed_content_same_key(make_client, service):
-    scenario_logger.info("用例: 6 个相同 + 2 个不同内容同键并发 —— 期望相同方重放、异内容方拒绝")
+    scenario_logger.info("用例: 定调后 6 个相同 + 2 个不同内容同键并发 —— 期望相同方一致重放、异内容方拒绝")
+    # 首个同内容请求先行“定调”（建立该幂等键的内容契约）。
+    seed = _put(make_client(), "key-mixed", BODY, None)
+    assert seed.status_code == 201
+
     same_n, diff_n = 6, 2
     barrier = threading.Barrier(same_n + diff_n)
 
@@ -91,8 +95,7 @@ def test_concurrent_mixed_content_same_key(make_client, service):
     assert len({r.text for r in ok}) == 1
     assert service.read("widget").version == 1
     assert service.read("widget").name == "hello"
-    scenario_logger.info("结果: %d 个重复请求一致成功，%d 个异内容请求被拒，资源仅生效一次",
-                         len(ok), len(rejected))
+    scenario_logger.info("结果: 6 个重复请求一致重放成功，2 个异内容请求被拒；连同定调请求资源仍只生效一次")
 
 
 def test_replay_returns_consistent_result_after_state_advances(client, service):
